@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { cloudinary } from "@/lib/cloudinary";
+import { getCloudinary } from "@/lib/cloudinary";
 
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxBytes = 8 * 1024 * 1024;
 
 function uploadBuffer(buffer: Buffer, publicId: string) {
+  const cloudinary = getCloudinary();
   return new Promise<{ public_id: string; width?: number; height?: number }>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -67,6 +68,7 @@ export async function uploadListingImage(listingId: string, formData: FormData) 
   const publicId = `randten/listings/${user.id}/${listingId}/${crypto.randomUUID()}`;
 
   try {
+    const cloudinary = getCloudinary();
     const uploaded = await uploadBuffer(Buffer.from(await file.arrayBuffer()), publicId);
     const { error: rowError } = await supabase.from("listing_images").insert({
       listing_id: listingId,
@@ -107,7 +109,7 @@ export async function deleteListingImage(listingId: string, imageId: string) {
   }
 
   try {
-    await cloudinary.uploader.destroy(image.storage_path, {
+    await getCloudinary().uploader.destroy(image.storage_path, {
       type: "authenticated",
       resource_type: "image",
       invalidate: true,
