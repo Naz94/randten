@@ -7,16 +7,22 @@ function required(name: "CLOUDINARY_CLOUD_NAME" | "CLOUDINARY_API_KEY" | "CLOUDI
   return value;
 }
 
-cloudinary.config({
-  cloud_name: required("CLOUDINARY_CLOUD_NAME"),
-  api_key: required("CLOUDINARY_API_KEY"),
-  api_secret: required("CLOUDINARY_API_SECRET"),
-  secure: true,
-});
+function configureCloudinary() {
+  cloudinary.config({
+    cloud_name: required("CLOUDINARY_CLOUD_NAME"),
+    api_key: required("CLOUDINARY_API_KEY"),
+    api_secret: required("CLOUDINARY_API_SECRET"),
+    secure: true,
+  });
+}
 
-export { cloudinary };
+export function getCloudinary() {
+  configureCloudinary();
+  return cloudinary;
+}
 
 export function signedListingImageUrl(publicId: string) {
+  configureCloudinary();
   return cloudinary.url(publicId, {
     type: "authenticated",
     sign_url: true,
