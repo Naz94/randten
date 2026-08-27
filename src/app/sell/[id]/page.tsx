@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { signedListingImageUrl } from "@/lib/cloudinary";
 import { deleteListingImage, uploadListingImage } from "./image-actions";
 
 export default async function DraftListingPage({
@@ -34,9 +35,9 @@ export default async function DraftListingPage({
     .eq("listing_id", id)
     .order("position", { ascending: true });
 
-  const images = await Promise.all((imageRows ?? []).map(async (image) => {
-    const { data } = await supabase.storage.from("listing-images").createSignedUrl(image.storage_path, 60 * 30);
-    return { ...image, url: data?.signedUrl ?? null };
+  const images = (imageRows ?? []).map((image) => ({
+    ...image,
+    url: signedListingImageUrl(image.storage_path),
   }));
 
   const editable = ["draft", "payment_failed", "rejected"].includes(listing.status);
@@ -78,7 +79,7 @@ export default async function DraftListingPage({
               <div className="photo-grid">
                 {images.map((image) => (
                   <div className="photo-tile" key={image.id}>
-                    {image.url ? <img src={image.url} alt={`${listing.title} photo ${image.position}`} /> : <div className="photo-placeholder">Image unavailable</div>}
+                    <img src={image.url} alt={`${listing.title} photo ${image.position}`} />
                     {editable && (
                       <form action={deleteListingImage.bind(null, id, image.id)}>
                         <button type="submit" className="photo-remove">Remove</button>
@@ -103,7 +104,7 @@ export default async function DraftListingPage({
 
           <div className="trust-card compact">
             <strong>Saved safely as a draft</strong>
-            <p>Your draft and its photos stay private. Next we run safety checks, collect the R10 listing fee, and send it for moderation before anything can go public.</p>
+            <p>Your draft photos are stored as authenticated Cloudinary assets and are not publicly browseable. Supabase stores only the listing/image metadata. Next we run safety checks, collect the R10 listing fee, and send it for moderation before anything can go public.</p>
           </div>
           <Link className="primary" href="/sell" style={{ display: "inline-block", textDecoration: "none", marginTop: "1rem" }}>Create another listing</Link>
         </div>
