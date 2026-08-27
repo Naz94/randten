@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { initializePaystackTransaction } from "@/lib/paystack";
@@ -43,7 +44,10 @@ export async function startListingPayment(listingId: string) {
     redirect(`/sell/${listingId}?error=${encodeURIComponent("This listing must pass all readiness checks before payment")}`);
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://randten.vercel.app";
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
+  const siteUrl = host ? `${protocol}://${host}` : (process.env.NEXT_PUBLIC_SITE_URL ?? "https://randten.vercel.app");
   let authorizationUrl: string;
 
   try {
