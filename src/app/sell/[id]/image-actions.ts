@@ -3,14 +3,28 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { cloudinary } from "@/lib/cloudinary";
 
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxBytes = 8 * 1024 * 1024;
 
-function safeExtension(file: File) {
-  if (file.type === "image/png") return "png";
-  if (file.type === "image/webp") return "webp";
-  return "jpg";
+function uploadBuffer(buffer: Buffer, publicId: string) {
+  return new Promise<{ public_id: string; width?: number; height?: number }>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        public_id: publicId,
+        type: "authenticated",
+        resource_type: "image",
+        overwrite: false,
+        invalidate: true,
+      },
+      (error, result) => {
+        if (error || !result) return reject(error ?? new Error("Cloudinary upload failed"));
+        resolve({ public_id: result.public_id, width: result.width, height: result.height });
+      },
+    );
+    stream.end(buffer);
+  });
 }
 
 export async function uploadListingImage(listingId: string, formData: FormData) {
@@ -50,24 +64,25 @@ export async function uploadListingImage(listingId: string, formData: FormData) 
   }
 
   const position = (count ?? 0) + 1;
-  const path = `${user.id}/${listingId}/${crypto.randomUUID()}.${safeExtension(file)}`;
-  const bytes = await file.arrayBuffer();
+  const publicId = `randten/listings/${user.id}/${listingId}/${crypto.randomUUID()}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from("listing-images")
-    .upload(path, bytes, { contentType: file.type, upsert: false });
+  try {
+    const uploaded = await uploadBuffer(Buffer.from(await file.arrayBuffer()), publicId);
+    const { error: rowError } = await supabase.from("listing_images").insert({
+      listing_id: listingId,
+      storage_path: uploaded.public_id,
+      position,
+      width: uploaded.width ?? null,
+      height: uploaded.height ?? null,
+    });
 
-  if (uploadError) {
-    redirect(`/sell/${listingId}?error=${encodeURIComponent(uploadError.message)}`);
-  }
-
-  const { error: rowError } = await supabase
-    .from("listing_images")
-    .insert({ listing_id: listingId, storage_path: path, position });
-
-  if (rowError) {
-    await supabase.storage.from("listing-images").remove([path]);
-    redirect(`/sell/${listingId}?error=${encodeURIComponent(rowError.message)}`);
+    if (rowError) {
+      await cloudinary.uploader.destroy(uploaded.public_id, { type: "authenticated", resource_type: "image", invalidate: true });
+      redirect(`/sell/${listingId}?error=${encodeURIComponent(rowError.message)}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Photo upload failed";
+    redirect(`/sell/${listingId}?error=${encodeURIComponent(message)}`);
   }
 
   revalidatePath(`/sell/${listingId}`);
@@ -91,9 +106,15 @@ export async function deleteListingImage(listingId: string, imageId: string) {
     redirect(`/sell/${listingId}?error=${encodeURIComponent("You cannot remove that photo")}`);
   }
 
-  const { error: storageError } = await supabase.storage.from("listing-images").remove([image.storage_path]);
-  if (storageError) {
-    redirect(`/sell/${listingId}?error=${encodeURIComponent(storageError.message)}`);
+  try {
+    await cloudinary.uploader.destroy(image.storage_path, {
+      type: "authenticated",
+      resource_type: "image",
+      invalidate: true,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Photo removal failed";
+    redirect(`/sell/${listingId}?error=${encodeURIComponent(message)}`);
   }
 
   await supabase.from("listing_images").delete().eq("id", imageId);
