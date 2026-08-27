@@ -21,6 +21,7 @@ h2 { margin-top: 0; font-size: 1.8rem; }
 .form-stack input:focus, .form-stack select:focus, .form-stack textarea:focus { outline: 2px solid #111; outline-offset: 1px; }
 .primary, .ghost { border-radius: 999px; padding: .8rem 1.15rem; cursor: pointer; font-weight: 800; }
 .primary { border: 1px solid #111; background: #111; color: #fff; }
+.primary:disabled { cursor: not-allowed; opacity: .48; }
 .ghost { border: 1px solid #cfcfc8; background: transparent; color: #111; }
 .notice { padding: .8rem 1rem; border-radius: 10px; background: #eeeee8; font-size: .9rem; }
 .notice.error { background: #f8e7e4; }
@@ -51,4 +52,15 @@ h2 { margin-top: 0; font-size: 1.8rem; }
 .upload-box { display: grid; gap: .35rem; border: 1px dashed #aaa; border-radius: 14px; padding: 1.1rem; background: #fafaf7; cursor: pointer; }
 .upload-box span { color: #6b6b66; font-size: .9rem; }
 .upload-box input { margin-top: .45rem; }
+.readiness-card { margin: 2rem 0; padding: 1.25rem; border: 1px solid #d6d6cf; border-radius: 16px; background: #fafaf7; }
+.readiness-card.ready { border-color: #8ca98f; }
+.readiness-card.blocked { border-color: #d7a59d; }
+.readiness-card h2 { margin: .3rem 0; }
+.check-list { display: grid; gap: .8rem; margin: 1.25rem 0; }
+.check-row { display: grid; grid-template-columns: 2rem 1fr; gap: .65rem; align-items: start; padding-top: .8rem; border-top: 1px solid #e1e1da; }
+.check-mark { width: 1.7rem; height: 1.7rem; display: grid; place-items: center; border: 1px solid #bbb; border-radius: 50%; font-weight: 900; }
+.check-row span:last-child { display: grid; gap: .2rem; }
+.check-row small { color: #686863; line-height: 1.4; }
+.payment-preview { display: grid; gap: .7rem; padding-top: 1rem; border-top: 1px solid #d6d6cf; }
+.payment-preview p { margin: 0; color: #5d5d58; line-height: 1.5; }
 @media (max-width: 760px) { .account-grid, .listing-form-shell { grid-template-columns: 1fr; } .account-header { margin-bottom: 3rem; } }
