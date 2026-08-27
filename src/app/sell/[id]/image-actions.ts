@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { cloudinary } from "@/lib/cloudinary";
+import { getCloudinary } from "@/lib/cloudinary";
 
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxBytes = 8 * 1024 * 1024;
@@ -24,6 +24,7 @@ function cloudinaryErrorMessage(error: unknown) {
 }
 
 function uploadBuffer(buffer: Buffer, publicId: string) {
+  const cloudinary = getCloudinary();
   return new Promise<{ public_id: string; width?: number; height?: number }>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -92,6 +93,7 @@ export async function uploadListingImage(listingId: string, formData: FormData) 
     });
 
     if (rowError) {
+      const cloudinary = getCloudinary();
       await cloudinary.uploader.destroy(uploaded.public_id, { type: "authenticated", resource_type: "image", invalidate: true });
       redirect(`/sell/${listingId}?error=${encodeURIComponent(rowError.message)}`);
     }
@@ -121,6 +123,7 @@ export async function deleteListingImage(listingId: string, imageId: string) {
   }
 
   try {
+    const cloudinary = getCloudinary();
     await cloudinary.uploader.destroy(image.storage_path, {
       type: "authenticated",
       resource_type: "image",
