@@ -7,6 +7,10 @@ function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
+function siteUrl() {
+  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://randten.vercel.app").replace(/\/$/, "");
+}
+
 export async function signUp(formData: FormData) {
   const displayName = value(formData, "displayName");
   const email = value(formData, "email").toLowerCase();
@@ -23,7 +27,10 @@ export async function signUp(formData: FormData) {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { display_name: displayName } },
+    options: {
+      data: { display_name: displayName },
+      emailRedirectTo: `${siteUrl()}/auth/callback`,
+    },
   });
 
   if (error) redirect(`/signup?error=${encodeURIComponent(error.message)}`);
