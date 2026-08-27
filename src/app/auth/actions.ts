@@ -34,8 +34,23 @@ export async function signUp(formData: FormData) {
   });
 
   if (error) redirect(`/signup?error=${encodeURIComponent(error.message)}`);
-  if (!data.session) redirect("/login?message=Check%20your%20email%20to%20confirm%20your%20RANDTEN%20account");
+  if (!data.session) redirect(`/login?message=${encodeURIComponent("Check your email to confirm your RANDTEN account")}&email=${encodeURIComponent(email)}`);
   redirect("/account");
+}
+
+export async function resendConfirmation(formData: FormData) {
+  const email = value(formData, "email").toLowerCase();
+  if (!email) redirect("/resend-confirmation?error=Enter%20your%20email%20address");
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${siteUrl()}/auth/callback` },
+  });
+
+  if (error) redirect(`/resend-confirmation?error=${encodeURIComponent(error.message)}&email=${encodeURIComponent(email)}`);
+  redirect(`/resend-confirmation?message=${encodeURIComponent("Confirmation email sent. Check your inbox and spam folder.")}&email=${encodeURIComponent(email)}`);
 }
 
 export async function signIn(formData: FormData) {
@@ -43,7 +58,7 @@ export async function signIn(formData: FormData) {
   const password = value(formData, "password");
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/login?error=${encodeURIComponent(error.message)}&email=${encodeURIComponent(email)}`);
   redirect("/account");
 }
 
