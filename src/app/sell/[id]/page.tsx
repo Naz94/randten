@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { signedListingImageUrl } from "@/lib/cloudinary";
 import { listingReadyForPayment, listingSafetyChecks } from "@/lib/listing-safety";
 import { deleteListingImage, uploadListingImage } from "./image-actions";
+import { startListingPayment } from "./payment-actions";
 
 export default async function DraftListingPage({
   params,
@@ -53,6 +54,7 @@ export default async function DraftListingPage({
   });
   const readyForPayment = listingReadyForPayment(checks);
   const editable = ["draft", "payment_failed", "rejected"].includes(listing.status);
+  const awaitingModeration = listing.status === "pending_review";
 
   return (
     <main className="account-shell">
@@ -114,28 +116,38 @@ export default async function DraftListingPage({
             )}
           </section>
 
-          <section className={`readiness-card ${readyForPayment ? "ready" : "blocked"}`}>
-            <p className="eyebrow">Safety & readiness</p>
-            <h2>{readyForPayment ? "Ready for the R10 step" : "Not ready for payment yet"}</h2>
-            <p className="muted">RANDTEN checks the basics before taking your listing fee. Passing this screen does not publish the item — every paid listing still goes to moderation.</p>
-            <div className="check-list">
-              {checks.map((check) => (
-                <div className="check-row" key={check.id}>
-                  <span className="check-mark" aria-hidden="true">{check.passed ? "✓" : "!"}</span>
-                  <span><strong>{check.label}</strong><small>{check.detail}</small></span>
-                </div>
-              ))}
-            </div>
-            {readyForPayment ? (
-              <div className="payment-preview">
-                <strong>R10 listing fee</strong>
-                <p>Payment integration is the next step. Paying will move the listing into moderation — never directly to public.</p>
-                <button className="primary" type="button" disabled>Pay R10 & submit — coming next</button>
+          {awaitingModeration ? (
+            <section className="readiness-card ready">
+              <p className="eyebrow">Moderation</p>
+              <h2>Payment received — review pending</h2>
+              <p className="muted">Your listing is locked while RANDTEN reviews it. It is still private and cannot appear in the marketplace until approved.</p>
+            </section>
+          ) : (
+            <section className={`readiness-card ${readyForPayment ? "ready" : "blocked"}`}>
+              <p className="eyebrow">Safety & readiness</p>
+              <h2>{readyForPayment ? "Ready for the R10 step" : "Not ready for payment yet"}</h2>
+              <p className="muted">RANDTEN checks the basics before taking your listing fee. Passing this screen does not publish the item — every paid listing still goes to moderation.</p>
+              <div className="check-list">
+                {checks.map((check) => (
+                  <div className="check-row" key={check.id}>
+                    <span className="check-mark" aria-hidden="true">{check.passed ? "✓" : "!"}</span>
+                    <span><strong>{check.label}</strong><small>{check.detail}</small></span>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <p className="notice error">Fix the items marked above before RANDTEN offers payment.</p>
-            )}
-          </section>
+              {readyForPayment && editable ? (
+                <div className="payment-preview">
+                  <strong>R10 listing fee</strong>
+                  <p>Pay securely through Paystack. RANDTEN verifies the payment server-side, then moves the listing into moderation — never directly to public.</p>
+                  <form action={startListingPayment.bind(null, id)}>
+                    <button className="primary" type="submit">Pay R10 & submit for review</button>
+                  </form>
+                </div>
+              ) : (
+                <p className="notice error">Fix the items marked above before RANDTEN offers payment.</p>
+              )}
+            </section>
+          )}
 
           <div className="trust-card compact">
             <strong>Private until approved</strong>
