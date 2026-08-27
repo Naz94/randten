@@ -3,13 +3,27 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCloudinary } from "@/lib/cloudinary";
+import { cloudinary } from "@/lib/cloudinary";
 
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxBytes = 8 * 1024 * 1024;
 
+function cloudinaryErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object") {
+    const candidate = error as { message?: unknown; error?: { message?: unknown }; http_code?: unknown };
+    const message = typeof candidate.message === "string"
+      ? candidate.message
+      : typeof candidate.error?.message === "string"
+        ? candidate.error.message
+        : null;
+    if (message) return message;
+    if (candidate.http_code) return `Cloudinary request failed (${String(candidate.http_code)})`;
+  }
+  return "Photo upload failed";
+}
+
 function uploadBuffer(buffer: Buffer, publicId: string) {
-  const cloudinary = getCloudinary();
   return new Promise<{ public_id: string; width?: number; height?: number }>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -68,7 +82,6 @@ export async function uploadListingImage(listingId: string, formData: FormData) 
   const publicId = `randten/listings/${user.id}/${listingId}/${crypto.randomUUID()}`;
 
   try {
-    const cloudinary = getCloudinary();
     const uploaded = await uploadBuffer(Buffer.from(await file.arrayBuffer()), publicId);
     const { error: rowError } = await supabase.from("listing_images").insert({
       listing_id: listingId,
@@ -83,8 +96,7 @@ export async function uploadListingImage(listingId: string, formData: FormData) 
       redirect(`/sell/${listingId}?error=${encodeURIComponent(rowError.message)}`);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Photo upload failed";
-    redirect(`/sell/${listingId}?error=${encodeURIComponent(message)}`);
+    redirect(`/sell/${listingId}?error=${encodeURIComponent(cloudinaryErrorMessage(error))}`);
   }
 
   revalidatePath(`/sell/${listingId}`);
@@ -109,14 +121,13 @@ export async function deleteListingImage(listingId: string, imageId: string) {
   }
 
   try {
-    await getCloudinary().uploader.destroy(image.storage_path, {
+    await cloudinary.uploader.destroy(image.storage_path, {
       type: "authenticated",
       resource_type: "image",
       invalidate: true,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Photo removal failed";
-    redirect(`/sell/${listingId}?error=${encodeURIComponent(message)}`);
+    redirect(`/sell/${listingId}?error=${encodeURIComponent(cloudinaryErrorMessage(error))}`);
   }
 
   await supabase.from("listing_images").delete().eq("id", imageId);
