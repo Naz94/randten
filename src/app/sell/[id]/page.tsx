@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signedListingImageUrl } from "@/lib/cloudinary";
+import { listingReadyForPayment, listingSafetyChecks } from "@/lib/listing-safety";
 import { deleteListingImage, uploadListingImage } from "./image-actions";
 
 export default async function DraftListingPage({
@@ -40,6 +41,17 @@ export default async function DraftListingPage({
     url: signedListingImageUrl(image.storage_path),
   }));
 
+  const checks = listingSafetyChecks({
+    title: listing.title,
+    description: listing.description,
+    price_cents: listing.price_cents,
+    condition: listing.condition,
+    province: listing.province,
+    city: listing.city,
+    categoryName,
+    imageCount: images.length,
+  });
+  const readyForPayment = listingReadyForPayment(checks);
   const editable = ["draft", "payment_failed", "rejected"].includes(listing.status);
 
   return (
@@ -102,9 +114,32 @@ export default async function DraftListingPage({
             )}
           </section>
 
+          <section className={`readiness-card ${readyForPayment ? "ready" : "blocked"}`}>
+            <p className="eyebrow">Safety & readiness</p>
+            <h2>{readyForPayment ? "Ready for the R10 step" : "Not ready for payment yet"}</h2>
+            <p className="muted">RANDTEN checks the basics before taking your listing fee. Passing this screen does not publish the item — every paid listing still goes to moderation.</p>
+            <div className="check-list">
+              {checks.map((check) => (
+                <div className="check-row" key={check.id}>
+                  <span className="check-mark" aria-hidden="true">{check.passed ? "✓" : "!"}</span>
+                  <span><strong>{check.label}</strong><small>{check.detail}</small></span>
+                </div>
+              ))}
+            </div>
+            {readyForPayment ? (
+              <div className="payment-preview">
+                <strong>R10 listing fee</strong>
+                <p>Payment integration is the next step. Paying will move the listing into moderation — never directly to public.</p>
+                <button className="primary" type="button" disabled>Pay R10 & submit — coming next</button>
+              </div>
+            ) : (
+              <p className="notice error">Fix the items marked above before RANDTEN offers payment.</p>
+            )}
+          </section>
+
           <div className="trust-card compact">
-            <strong>Saved safely as a draft</strong>
-            <p>Your draft photos are stored as authenticated Cloudinary assets and are not publicly browseable. Supabase stores only the listing/image metadata. Next we run safety checks, collect the R10 listing fee, and send it for moderation before anything can go public.</p>
+            <strong>Private until approved</strong>
+            <p>Your draft photos are authenticated Cloudinary assets. Basic screening is only a first gate; a listing still needs payment and moderation before publication.</p>
           </div>
           <Link className="primary" href="/sell" style={{ display: "inline-block", textDecoration: "none", marginTop: "1rem" }}>Create another listing</Link>
         </div>
