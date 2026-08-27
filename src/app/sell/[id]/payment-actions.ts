@@ -44,6 +44,7 @@ export async function startListingPayment(listingId: string) {
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://randten.vercel.app";
+  let authorizationUrl: string;
 
   try {
     const payment = await initializePaystackTransaction({
@@ -52,9 +53,11 @@ export async function startListingPayment(listingId: string) {
       sellerId: user.id,
       callbackUrl: `${siteUrl}/payments/paystack/callback`,
     });
-    redirect(payment.authorizationUrl);
+    authorizationUrl = payment.authorizationUrl;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not start payment";
     redirect(`/sell/${listingId}?error=${encodeURIComponent(message)}`);
   }
+
+  redirect(authorizationUrl);
 }
