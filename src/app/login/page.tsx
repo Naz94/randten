@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { signIn } from "../auth/actions";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string }> }) {
   const params = await searchParams;
@@ -12,7 +11,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <p className="muted">Your contact details stay private. Buyers and sellers communicate inside RANDTEN.</p>
         {params.error && <p className="notice error">{params.error}</p>}
         {params.message && <p className="notice">{params.message}</p>}
-        <form action={signIn} className="form-stack">
+        <form action="/api/login" method="post" className="form-stack">
           <label>Email<input name="email" type="email" autoComplete="email" required /></label>
           <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
           <button className="primary" type="submit">Log in</button>
