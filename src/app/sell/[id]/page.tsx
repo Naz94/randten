@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+type ListingCategory = { name: string } | { name: string }[] | null;
+
 export default async function DraftListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
@@ -17,6 +19,9 @@ export default async function DraftListingPage({ params }: { params: Promise<{ i
 
   if (!listing) notFound();
 
+  const categories = listing.categories as ListingCategory;
+  const categoryName = Array.isArray(categories) ? categories[0]?.name : categories?.name;
+
   return (
     <main className="account-shell">
       <header className="account-header"><Link href="/" className="brand">RANDTEN</Link><Link className="ghost" href="/account" style={{ textDecoration: "none" }}>Account</Link></header>
@@ -27,7 +32,7 @@ export default async function DraftListingPage({ params }: { params: Promise<{ i
           <p className="muted">Status: <strong>{listing.status.replaceAll("_", " ")}</strong></p>
         </div>
         <div className="auth-card listing-card">
-          <p><strong>Category</strong><br />{Array.isArray(listing.categories) ? listing.categories[0]?.name : listing.categories?.name}</p>
+          <p><strong>Category</strong><br />{categoryName ?? "Uncategorised"}</p>
           <p><strong>Price</strong><br />R{(listing.price_cents / 100).toFixed(2)}</p>
           <p><strong>Condition</strong><br />{listing.condition.replaceAll("_", " ")}</p>
           <p><strong>Location</strong><br />{listing.city}, {listing.province}</p>
