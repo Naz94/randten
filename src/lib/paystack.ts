@@ -11,7 +11,7 @@ function secretKey() {
 type PaystackMetadata = {
   listing_id?: string;
   seller_id?: string;
-} | string | null | undefined;
+} | null | undefined;
 
 export type PaystackTransaction = {
   status: string;
@@ -23,9 +23,10 @@ export type PaystackTransaction = {
   metadata?: PaystackMetadata;
 };
 
-function metadataObject(metadata: PaystackMetadata) {
+function metadataObject(metadata: unknown) {
   if (!metadata) return null;
-  if (typeof metadata === "object") return metadata;
+  if (typeof metadata === "object") return metadata as { listing_id?: string; seller_id?: string };
+  if (typeof metadata !== "string") return null;
   try {
     return JSON.parse(metadata) as { listing_id?: string; seller_id?: string };
   } catch {
@@ -133,14 +134,21 @@ export async function findSuccessfulRandtenListingPayment(input: {
     const payload = await response.json() as {
       status?: boolean;
       message?: string;
-      data?: PaystackTransaction[];
+      data?: Array<Omit<PaystackTransaction, "metadata"> & { metadata?: unknown }>;
     };
 
     if (!response.ok || !payload.status || !payload.data) {
       throw new Error(payload.message || "Could not verify listing payment history");
     }
 
-    const match = payload.data.find((transaction) => paystackListingPaymentMatches(transaction, input.listingId, input.sellerId));
+    const match = payload.data.find((transaction) => {
+      const metadata = metadataObject(transaction.metadata);
+      return transaction.status === "success"
+        && transaction.amount === 1000
+        && transaction.currency === "ZAR"
+        && metadata?.listing_id === input.listingId
+        && metadata?.seller_id === input.sellerId;
+    });
     if (match) return match;
     if (payload.data.length < perPage) break;
   }
