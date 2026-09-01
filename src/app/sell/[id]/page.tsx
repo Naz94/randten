@@ -55,6 +55,7 @@ export default async function DraftListingPage({
   const readyForPayment = listingReadyForPayment(checks);
   const editable = ["draft", "payment_failed", "rejected"].includes(listing.status);
   const awaitingModeration = listing.status === "pending_review";
+  const published = listing.status === "published";
 
   return (
     <main className="account-shell">
@@ -65,7 +66,7 @@ export default async function DraftListingPage({
 
       <section className="listing-form-shell">
         <div>
-          <p className="eyebrow">Listing draft</p>
+          <p className="eyebrow">Your listing</p>
           <h1>{listing.title}</h1>
           <p className="muted">Status: <strong>{listing.status.replaceAll("_", " ")}</strong></p>
           {query.error && <p className="notice error">{query.error}</p>}
@@ -116,17 +117,23 @@ export default async function DraftListingPage({
             )}
           </section>
 
-          {awaitingModeration ? (
+          {published ? (
             <section className="readiness-card ready">
-              <p className="eyebrow">Moderation</p>
-              <h2>Payment received — review pending</h2>
-              <p className="muted">Your listing is locked while RANDTEN reviews it. It is still private and cannot appear in the marketplace until approved.</p>
+              <p className="eyebrow">Live</p>
+              <h2>Your listing is published</h2>
+              <p className="muted">Payment was verified and RANDTEN&apos;s automated safety checks passed. Your listing can now appear in the marketplace.</p>
+            </section>
+          ) : awaitingModeration ? (
+            <section className="readiness-card blocked">
+              <p className="eyebrow">Safety review</p>
+              <h2>Payment received — extra review needed</h2>
+              <p className="muted">Automated checks flagged this listing for an additional safety review. It remains private until cleared.</p>
             </section>
           ) : (
             <section className={`readiness-card ${readyForPayment ? "ready" : "blocked"}`}>
               <p className="eyebrow">Safety & readiness</p>
               <h2>{readyForPayment ? "Ready for the R10 step" : "Not ready for payment yet"}</h2>
-              <p className="muted">RANDTEN checks the basics before taking your listing fee. Passing this screen does not publish the item — every paid listing still goes to moderation.</p>
+              <p className="muted">RANDTEN checks the basics before taking your listing fee. After verified payment, low-risk listings can publish automatically; suspicious listings are held for an additional safety review.</p>
               <div className="check-list">
                 {checks.map((check) => (
                   <div className="check-row" key={check.id}>
@@ -138,9 +145,9 @@ export default async function DraftListingPage({
               {readyForPayment && editable ? (
                 <div className="payment-preview">
                   <strong>R10 listing fee</strong>
-                  <p>Pay securely through Paystack. RANDTEN verifies the payment server-side, then moves the listing into moderation — never directly to public.</p>
+                  <p>Pay securely through Paystack. RANDTEN verifies the payment server-side and runs automated safety checks before the listing can go live.</p>
                   <form action={startListingPayment.bind(null, id)}>
-                    <button className="primary" type="submit">Pay R10 & submit for review</button>
+                    <button className="primary" type="submit">Pay R10 & submit listing</button>
                   </form>
                 </div>
               ) : (
@@ -150,8 +157,8 @@ export default async function DraftListingPage({
           )}
 
           <div className="trust-card compact">
-            <strong>Private until approved</strong>
-            <p>Your draft photos are authenticated Cloudinary assets. Basic screening is only a first gate; a listing still needs payment and moderation before publication.</p>
+            <strong>Private until cleared</strong>
+            <p>Draft photos are authenticated Cloudinary assets. RANDTEN uses automated checks to clear ordinary listings and escalates suspicious listings for additional review.</p>
           </div>
           <Link className="primary" href="/sell" style={{ display: "inline-block", textDecoration: "none", marginTop: "1rem" }}>Create another listing</Link>
         </div>
