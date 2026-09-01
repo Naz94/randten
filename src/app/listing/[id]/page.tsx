@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getListingImages, getPublishedListing, getSellerPublicProfile } from "@/lib/marketplace";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { reportListing } from "./report-actions";
 import { startConversation, toggleSavedListing } from "./buyer-actions";
 
@@ -18,10 +20,19 @@ export default async function ListingPage({
   const listing = await getPublishedListing(id);
   if (!listing) notFound();
 
-  const [images, seller] = await Promise.all([
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const admin = createAdminClient();
+
+  const [images, seller, savedResult] = await Promise.all([
     getListingImages(id),
     getSellerPublicProfile(listing.sellerId),
+    user
+      ? admin.from("saved_listings").select("listing_id").eq("user_id", user.id).eq("listing_id", id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+  const isSaved = Boolean(savedResult.data);
+  const isOwnListing = user?.id === listing.sellerId;
 
   return (
     <main className="market-shell">
@@ -48,23 +59,27 @@ export default async function ListingPage({
             <span>{seller?.rating_count ? `${Number(seller.rating_average ?? 0).toFixed(1)} ★ (${seller.rating_count})` : "New seller"}</span>
           </Link>
 
-          <div className="account-actions">
-            <form action={startConversation.bind(null, id)}><button className="primary" type="submit">Message seller</button></form>
-            <form action={toggleSavedListing.bind(null, id)}><button className="ghost" type="submit">Save / unsave</button></form>
-          </div>
+          {isOwnListing ? (
+            <div className="account-actions"><Link className="primary" href={`/sell/${id}`}>Manage your listing</Link></div>
+          ) : (
+            <div className="account-actions">
+              <form action={startConversation.bind(null, id)}><button className="primary" type="submit">Message seller</button></form>
+              <form action={toggleSavedListing.bind(null, id)}><button className="ghost" type="submit">{isSaved ? "Saved ✓" : "Save listing"}</button></form>
+            </div>
+          )}
 
           <div className="trust-card compact"><strong>RANDTEN trust layer</strong><p>This listing completed payment verification and automated screening before publication. Keep conversations inside RANDTEN and never send money using a method you do not trust.</p></div>
           {query.message && <p className="notice">{query.message}</p>}
           {query.error && <p className="notice error">{query.error}</p>}
 
-          <details className="report-box">
+          {!isOwnListing && <details className="report-box">
             <summary>Report this listing</summary>
             <form action={reportListing.bind(null, id)} className="form-stack">
               <label>Reason<select name="reason" required defaultValue=""><option value="" disabled>Choose reason</option><option value="scam">Possible scam</option><option value="prohibited">Prohibited item</option><option value="counterfeit">Possible counterfeit</option><option value="misleading">Misleading listing</option><option value="duplicate">Duplicate listing</option><option value="other">Other</option></select></label>
               <label>Details<textarea name="details" rows={4} maxLength={1000} placeholder="Tell RANDTEN what looks wrong." /></label>
               <button className="ghost" type="submit">Send report</button>
             </form>
-          </details>
+          </details>}
         </aside>
       </section>
     </main>
