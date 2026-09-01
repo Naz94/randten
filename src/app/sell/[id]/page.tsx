@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { signedListingImageUrl } from "@/lib/cloudinary";
 import { listingReadyForPayment, listingSafetyChecks } from "@/lib/listing-safety";
 import { deleteListingImage, uploadListingImage } from "./image-actions";
+import { rerunAutomatedModeration } from "./moderation-actions";
 import { startListingPayment } from "./payment-actions";
 
 export default async function DraftListingPage({
@@ -127,7 +128,10 @@ export default async function DraftListingPage({
             <section className="readiness-card blocked">
               <p className="eyebrow">Safety review</p>
               <h2>Payment received — extra review needed</h2>
-              <p className="muted">Automated checks flagged this listing for an additional safety review. It remains private until cleared.</p>
+              <p className="muted">This listing entered review before RANDTEN&apos;s automated publishing flow was enabled, or automated checks asked for a closer look. You can safely run the current automated checks again.</p>
+              <form action={rerunAutomatedModeration.bind(null, id)}>
+                <button className="primary" type="submit">Run automated safety check</button>
+              </form>
             </section>
           ) : (
             <section className={`readiness-card ${readyForPayment ? "ready" : "blocked"}`}>
