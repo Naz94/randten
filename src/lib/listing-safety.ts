@@ -23,7 +23,7 @@ export type AutomatedModerationDecision = {
   riskScore: number;
 };
 
-export const MODERATION_ENGINE_VERSION = "randten-text-risk-v2";
+export const MODERATION_ENGINE_VERSION = "randten-text-risk-v3";
 
 const prohibitedPatterns: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /\b(gun|firearm|pistol|rifle|shotgun|ammunition|ammo|bullet|silencer)\b/i, label: "weapons or ammunition" },
@@ -95,8 +95,8 @@ export function automatedModerationDecision(input: ListingSafetyInput): Automate
   const reasons = [...matchedReviewReasons];
   let riskScore = matchedReviewReasons.length * 40;
 
-  if (input.price_cents >= 250_000_00) {
-    reasons.push("very high listing value");
+  if (input.price_cents >= 25_000_00) {
+    reasons.push("high listing value");
     riskScore += 30;
   }
 
