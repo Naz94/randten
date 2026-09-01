@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { moderatePaidListing } from "@/lib/automated-moderation";
 import { isValidRandtenListingPayment, verifyPaystackTransaction } from "@/lib/paystack";
 
 export async function GET(request: Request) {
@@ -27,33 +27,12 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/account?error=${encodeURIComponent("We could not verify this R10 listing payment")}`, 303);
     }
 
-    const { data: listing } = await supabase
-      .from("listings")
-      .select("id,status")
-      .eq("id", listingId)
-      .eq("seller_id", user.id)
-      .single();
+    const result = await moderatePaidListing(listingId, user.id);
+    const message = result.status === "published"
+      ? "R10 payment verified. Automated checks passed and your listing is now live."
+      : "R10 payment verified. This listing needs an additional safety review before it can go live.";
 
-    if (!listing) {
-      return NextResponse.redirect(`${origin}/account?error=${encodeURIComponent("Listing not found for this payment")}`, 303);
-    }
-
-    if (["draft", "payment_failed", "rejected"].includes(listing.status)) {
-      const admin = createAdminClient();
-      const { error } = await admin
-        .from("listings")
-        .update({ status: "pending_review" })
-        .eq("id", listingId)
-        .eq("seller_id", user.id)
-        .in("status", ["draft", "payment_failed", "rejected"]);
-
-      if (error) {
-        console.error("Paystack callback listing update failed", error.message);
-        return NextResponse.redirect(`${origin}/sell/${listingId}?error=${encodeURIComponent("Payment was verified, but RANDTEN could not move the listing into review. Please contact support.")}`, 303);
-      }
-    }
-
-    return NextResponse.redirect(`${origin}/sell/${listingId}?message=${encodeURIComponent("R10 payment verified. Your listing is now waiting for moderation.")}`, 303);
+    return NextResponse.redirect(`${origin}/sell/${listingId}?message=${encodeURIComponent(message)}`, 303);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Payment verification failed";
     return NextResponse.redirect(`${origin}/account?error=${encodeURIComponent(message)}`, 303);
