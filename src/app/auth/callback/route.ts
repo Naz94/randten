@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
+  const next = url.searchParams.get("next");
+  const safeNext = next?.startsWith("/") && !next.startsWith("//") ? next : "/account";
 
   if (!code) {
     return NextResponse.redirect(new URL("/login?error=Missing%20authentication%20code", url.origin));
@@ -16,5 +18,5 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.message)}`, url.origin));
   }
 
-  return NextResponse.redirect(new URL("/account", url.origin));
+  return NextResponse.redirect(new URL(safeNext, url.origin));
 }
