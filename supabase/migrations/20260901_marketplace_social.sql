@@ -50,7 +50,7 @@ revoke all on table public.messages from anon, authenticated;
 create or replace function public.touch_conversation_updated_at()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 begin
@@ -60,6 +60,8 @@ begin
   return new;
 end;
 $$;
+
+revoke all on function public.touch_conversation_updated_at() from public, anon, authenticated;
 
 drop trigger if exists touch_conversation_after_message on public.messages;
 create trigger touch_conversation_after_message
