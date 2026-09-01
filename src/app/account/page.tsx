@@ -11,7 +11,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("display_name,province,city,rating_average,rating_count,created_at").eq("id", user.id).single();
+  const { data: profile } = await supabase.from("profiles").select("display_name,province,city,rating_average,rating_count,created_at,is_admin").eq("id", user.id).single();
   if (!profile) redirect("/login?error=We%20could%20not%20load%20your%20profile");
 
   const { data: listings } = await supabase
@@ -25,7 +25,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     <main className="account-shell">
       <header className="account-header">
         <Link href="/" className="brand">RANDTEN</Link>
-        <nav className="market-nav"><Link href="/marketplace">Browse</Link><Link href="/messages">Messages</Link><Link href="/saved">Saved</Link><form action={signOut}><button className="ghost">Log out</button></form></nav>
+        <nav className="market-nav"><Link href="/marketplace">Browse</Link><Link href="/messages">Messages</Link><Link href="/saved">Saved</Link>{profile.is_admin && <Link href="/admin">Admin</Link>}<form action={signOut}><button className="ghost">Log out</button></form></nav>
       </header>
       <section className="account-grid">
         <div>
@@ -36,7 +36,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <Link className="primary" href="/sell" style={{ textDecoration: "none" }}>+ Create listing</Link>
             <Link className="ghost" href="/messages">Messages</Link>
             <Link className="ghost" href="/saved">Saved listings</Link>
+            {profile.is_admin && <Link className="ghost" href="/admin">Admin / Trust &amp; Safety</Link>}
           </div>
+          {profile.is_admin && <div className="trust-card"><strong>Owner access</strong><p>This account is authorized for RANDTEN Trust &amp; Safety administration.</p></div>}
           <div className="trust-card"><strong>Privacy by design</strong><p>Other marketplace users see your display name, general location and reputation — not your email address. Buyer and seller conversations stay inside RANDTEN.</p></div>
           <section className="my-listings">
             <div className="section-heading"><h2>Your listings</h2><Link href="/sell">New listing</Link></div>
