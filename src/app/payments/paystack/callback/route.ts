@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isValidRandtenListingPayment, verifyPaystackTransaction } from "@/lib/paystack";
 
 export async function GET(request: Request) {
@@ -38,14 +39,17 @@ export async function GET(request: Request) {
     }
 
     if (["draft", "payment_failed", "rejected"].includes(listing.status)) {
-      const { error } = await supabase
+      const admin = createAdminClient();
+      const { error } = await admin
         .from("listings")
         .update({ status: "pending_review" })
         .eq("id", listingId)
-        .eq("seller_id", user.id);
+        .eq("seller_id", user.id)
+        .in("status", ["draft", "payment_failed", "rejected"]);
 
       if (error) {
-        return NextResponse.redirect(`${origin}/sell/${listingId}?error=${encodeURIComponent(error.message)}`, 303);
+        console.error("Paystack callback listing update failed", error.message);
+        return NextResponse.redirect(`${origin}/sell/${listingId}?error=${encodeURIComponent("Payment was verified, but RANDTEN could not move the listing into review. Please contact support.")}`, 303);
       }
     }
 
