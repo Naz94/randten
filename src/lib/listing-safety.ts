@@ -20,7 +20,10 @@ export type SafetyCheck = {
 export type AutomatedModerationDecision = {
   action: "publish" | "review";
   reasons: string[];
+  riskScore: number;
 };
+
+export const MODERATION_ENGINE_VERSION = "randten-text-risk-v2";
 
 const prohibitedPatterns: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /\b(gun|firearm|pistol|rifle|shotgun|ammunition|ammo|bullet|silencer)\b/i, label: "weapons or ammunition" },
@@ -80,22 +83,36 @@ export function automatedModerationDecision(input: ListingSafetyInput): Automate
     return {
       action: "review",
       reasons: failedBlockingChecks.map((check) => check.label),
+      riskScore: 100,
     };
   }
 
   const combined = `${input.title} ${input.description} ${input.categoryName ?? ""}`;
-  const reasons = reviewPatterns
+  const matchedReviewReasons = reviewPatterns
     .filter(({ pattern }) => pattern.test(combined))
     .map(({ label }) => label);
 
-  // Very high-value listings deserve an extra human look until RANDTEN has
-  // richer seller-history and category-specific risk scoring.
+  const reasons = [...matchedReviewReasons];
+  let riskScore = matchedReviewReasons.length * 40;
+
   if (input.price_cents >= 250_000_00) {
     reasons.push("very high listing value");
+    riskScore += 30;
+  }
+
+  if (input.description.trim().length < 20) {
+    reasons.push("very short description");
+    riskScore += 10;
+  }
+
+  if (input.imageCount === 1) {
+    reasons.push("only one listing photo");
+    riskScore += 5;
   }
 
   return {
-    action: reasons.length > 0 ? "review" : "publish",
+    action: riskScore >= 30 ? "review" : "publish",
     reasons,
+    riskScore: Math.min(riskScore, 100),
   };
 }
