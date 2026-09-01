@@ -23,7 +23,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
 
   return (
     <main className="account-shell">
-      <header className="account-header"><Link href="/" className="brand">RANDTEN</Link><form action={signOut}><button className="ghost">Log out</button></form></header>
+      <header className="account-header">
+        <Link href="/" className="brand">RANDTEN</Link>
+        <nav className="market-nav"><Link href="/marketplace">Browse</Link><Link href="/messages">Messages</Link><Link href="/saved">Saved</Link><form action={signOut}><button className="ghost">Log out</button></form></nav>
+      </header>
       <section className="account-grid">
         <div>
           <p className="eyebrow">Your account</p>
@@ -31,8 +34,10 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
           <p className="muted">{user.email}</p>
           <div className="account-actions">
             <Link className="primary" href="/sell" style={{ textDecoration: "none" }}>+ Create listing</Link>
+            <Link className="ghost" href="/messages">Messages</Link>
+            <Link className="ghost" href="/saved">Saved listings</Link>
           </div>
-          <div className="trust-card"><strong>Privacy by design</strong><p>Other marketplace users see your display name, general location and reputation — not your email address.</p></div>
+          <div className="trust-card"><strong>Privacy by design</strong><p>Other marketplace users see your display name, general location and reputation — not your email address. Buyer and seller conversations stay inside RANDTEN.</p></div>
           <section className="my-listings">
             <div className="section-heading"><h2>Your listings</h2><Link href="/sell">New listing</Link></div>
             {!listings?.length ? <p className="muted">You have no listings yet. Create your first draft to start selling.</p> : listings.map((listing) => (
