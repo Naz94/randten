@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; message?: string; email?: string }> }) {
   const params = await searchParams;
   return (
     <main className="auth-shell">
@@ -12,10 +12,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         {params.error && <p className="notice error">{params.error}</p>}
         {params.message && <p className="notice">{params.message}</p>}
         <form action="/api/login" method="post" className="form-stack">
-          <label>Email<input name="email" type="email" autoComplete="email" required /></label>
+          <label>Email<input name="email" type="email" autoComplete="email" defaultValue={params.email ?? ""} required /></label>
           <label>Password<input name="password" type="password" autoComplete="current-password" required /></label>
           <button className="primary" type="submit">Log in</button>
         </form>
+        <p className="muted"><Link href="/forgot-password">Forgot password?</Link></p>
         <p className="muted">New here? <Link href="/signup">Create your account</Link></p>
       </section>
     </main>
