@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireRandtenAdmin } from "@/lib/admin-access";
 
-function adminRedirect(message?: string, error?: string) {
+function adminRedirect(message?: string, error?: string): never {
   const params = new URLSearchParams();
   if (message) params.set("message", message);
   if (error) params.set("error", error);
