@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { moderatePaidListing } from "@/lib/automated-moderation";
 import { isValidRandtenListingPayment } from "@/lib/paystack";
 
 export async function POST(request: Request) {
@@ -36,21 +36,16 @@ export async function POST(request: Request) {
   if (!listingId || !sellerId) return NextResponse.json({ received: true });
 
   try {
-    const admin = createAdminClient();
-    const { error } = await admin
-      .from("listings")
-      .update({ status: "pending_review" })
-      .eq("id", listingId)
-      .eq("seller_id", sellerId)
-      .in("status", ["draft", "payment_failed", "rejected"]);
-
-    if (error) {
-      console.error("Paystack webhook listing update failed", error.message);
-      return new NextResponse("Database update failed", { status: 500 });
-    }
+    const result = await moderatePaidListing(listingId, sellerId);
+    console.info("Paystack webhook moderation result", {
+      listingId,
+      status: result.status,
+      reasons: result.reasons,
+    });
   } catch (error) {
-    console.error("Paystack webhook failed", error);
-    return new NextResponse("Webhook processing failed", { status: 500 });
+    const message = error instanceof Error ? error.message : "Unknown moderation error";
+    console.error("Paystack webhook moderation failed", message);
+    return new NextResponse("Database update failed", { status: 500 });
   }
 
   return NextResponse.json({ received: true });
