@@ -53,6 +53,37 @@ export async function resendConfirmation(formData: FormData) {
   redirect(`/resend-confirmation?message=${encodeURIComponent("Confirmation email sent. Check your inbox and spam folder.")}&email=${encodeURIComponent(email)}`);
 }
 
+export async function requestPasswordReset(formData: FormData) {
+  const email = value(formData, "email").toLowerCase();
+  if (!email) redirect("/forgot-password?error=Enter%20your%20email%20address");
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${siteUrl()}/auth/callback?next=/reset-password`,
+  });
+
+  if (error) redirect(`/forgot-password?error=${encodeURIComponent(error.message)}&email=${encodeURIComponent(email)}`);
+  redirect(`/forgot-password?message=${encodeURIComponent("Password reset email sent. Check your inbox and spam folder.")}&email=${encodeURIComponent(email)}`);
+}
+
+export async function updatePassword(formData: FormData) {
+  const password = value(formData, "password");
+  const confirmPassword = value(formData, "confirmPassword");
+
+  if (password.length < 8) redirect("/reset-password?error=Password%20must%20be%20at%20least%208%20characters");
+  if (password !== confirmPassword) redirect("/reset-password?error=Passwords%20do%20not%20match");
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/forgot-password?error=Your%20reset%20link%20has%20expired.%20Request%20a%20new%20one.");
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) redirect(`/reset-password?error=${encodeURIComponent(error.message)}`);
+
+  await supabase.auth.signOut();
+  redirect("/login?message=Password%20updated.%20Log%20in%20with%20your%20new%20password.");
+}
+
 export async function signIn(formData: FormData) {
   const email = value(formData, "email").toLowerCase();
   const password = value(formData, "password");
