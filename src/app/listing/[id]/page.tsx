@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getListingImages, getPublishedListing, getSellerPublicProfile } from "@/lib/marketplace";
 import { reportListing } from "./report-actions";
+import { startConversation, toggleSavedListing } from "./buyer-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export default async function ListingPage({
     <main className="market-shell">
       <header className="market-header">
         <Link className="brand" href="/">RANDTEN</Link>
-        <nav className="market-nav"><Link href="/marketplace">Browse</Link><Link href="/sell">Sell</Link><Link href="/account">Account</Link></nav>
+        <nav className="market-nav"><Link href="/marketplace">Browse</Link><Link href="/messages">Messages</Link><Link href="/saved">Saved</Link><Link href="/sell">Sell</Link><Link href="/account">Account</Link></nav>
       </header>
 
       <section className="listing-public-grid">
@@ -47,7 +48,12 @@ export default async function ListingPage({
             <span>{seller?.rating_count ? `${Number(seller.rating_average ?? 0).toFixed(1)} ★ (${seller.rating_count})` : "New seller"}</span>
           </Link>
 
-          <div className="trust-card compact"><strong>RANDTEN trust layer</strong><p>This listing completed payment verification and automated screening before publication. Never send money outside a transaction method you trust.</p></div>
+          <div className="account-actions">
+            <form action={startConversation.bind(null, id)}><button className="primary" type="submit">Message seller</button></form>
+            <form action={toggleSavedListing.bind(null, id)}><button className="ghost" type="submit">Save / unsave</button></form>
+          </div>
+
+          <div className="trust-card compact"><strong>RANDTEN trust layer</strong><p>This listing completed payment verification and automated screening before publication. Keep conversations inside RANDTEN and never send money using a method you do not trust.</p></div>
           {query.message && <p className="notice">{query.message}</p>}
           {query.error && <p className="notice error">{query.error}</p>}
 
