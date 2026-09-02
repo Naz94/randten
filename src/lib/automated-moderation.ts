@@ -29,7 +29,31 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
 
   if (listingError || !listing) throw new Error(listingError?.message ?? "Listing not found");
   if (listing.status === "published") return { status: "published", reasons: [], riskScore: 0 };
-  if (listing.status === "pending_review") return { status: "pending_review", reasons: [], riskScore: 0 };
+
+  if (listing.status === "pending_review") {
+    // A payment callback/webhook may have already completed moderation. Reuse that
+    // result instead of running the checks (and image moderation) twice. If there is
+    // no automated event, the earlier run was interrupted after claiming the listing,
+    // so continue below and recover it safely.
+    const { data: existingEvent, error: existingEventError } = await admin
+      .from("moderation_events")
+      .select("decision,risk_score,reasons,engine_version")
+      .eq("listing_id", listingId)
+      .eq("seller_id", sellerId)
+      .like("engine_version", `${MODERATION_ENGINE_VERSION}%`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existingEventError) throw new Error(existingEventError.message);
+    if (existingEvent) {
+      return {
+        status: existingEvent.decision === "published" ? "published" : "pending_review",
+        reasons: existingEvent.reasons ?? [],
+        riskScore: existingEvent.risk_score ?? 0,
+      };
+    }
+  }
+
   if (listing.status === "approved") {
     const { data: published, error } = await admin.from("listings").update({ status: "published" })
       .eq("id", listingId).eq("seller_id", sellerId).eq("status", "approved").select("id").maybeSingle();
@@ -39,32 +63,34 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
     const { data: latest } = await admin.from("listings").select("status").eq("id", listingId).eq("seller_id", sellerId).single();
     return { status: latest?.status === "published" ? "published" : "pending_review", reasons: [], riskScore: 0 };
   }
-  if (!["draft", "payment_failed"].includes(listing.status)) {
+  if (!["draft", "payment_failed", "pending_review"].includes(listing.status)) {
     throw new Error(`Listing is not eligible for paid moderation from status ${listing.status}`);
   }
 
-  // Claim moderation by moving the listing into pending_review. Paystack's callback
-  // and webhook can arrive together; only the request that changes the row may run
-  // the expensive checks and write the audit event.
-  const { data: claimed, error: claimError } = await admin
-    .from("listings")
-    .update({ status: "pending_review" })
-    .eq("id", listingId)
-    .eq("seller_id", sellerId)
-    .in("status", ["draft", "payment_failed"])
-    .select("id")
-    .maybeSingle();
-  if (claimError) throw new Error(claimError.message);
-
-  if (!claimed) {
-    const { data: latest, error: latestError } = await admin
+  if (["draft", "payment_failed"].includes(listing.status)) {
+    // Claim moderation by moving the listing into pending_review. Paystack's callback
+    // and webhook can arrive together; only the request that changes the row may run
+    // the expensive checks and write the audit event.
+    const { data: claimed, error: claimError } = await admin
       .from("listings")
-      .select("status")
+      .update({ status: "pending_review" })
       .eq("id", listingId)
       .eq("seller_id", sellerId)
-      .single();
-    if (latestError || !latest) throw new Error(latestError?.message ?? "Listing not found after moderation claim");
-    return { status: latest.status === "published" ? "published" : "pending_review", reasons: [], riskScore: 0 };
+      .in("status", ["draft", "payment_failed"])
+      .select("id")
+      .maybeSingle();
+    if (claimError) throw new Error(claimError.message);
+
+    if (!claimed) {
+      const { data: latest, error: latestError } = await admin
+        .from("listings")
+        .select("status")
+        .eq("id", listingId)
+        .eq("seller_id", sellerId)
+        .single();
+      if (latestError || !latest) throw new Error(latestError?.message ?? "Listing not found after moderation claim");
+      return { status: latest.status === "published" ? "published" : "pending_review", reasons: [], riskScore: 0 };
+    }
   }
 
   const [{ data: imageRows, error: imageError }, sellerTrust] = await Promise.all([
