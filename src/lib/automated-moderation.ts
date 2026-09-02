@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { automatedModerationDecision, MODERATION_ENGINE_VERSION } from "@/lib/listing-safety";
 import { recordModerationAudit } from "@/lib/moderation-audit";
 import { getSellerTrustSummary } from "@/lib/seller-trust";
+import { moderateListingImages } from "@/lib/image-moderation";
 
 export type PaidListingModerationResult = {
   status: "published" | "pending_review";
@@ -32,17 +33,19 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
     throw new Error(`Listing is not eligible for paid moderation from status ${listing.status}`);
   }
 
-  const [{ count: imageCount, error: imageError }, sellerTrust] = await Promise.all([
+  const [{ data: imageRows, error: imageError }, sellerTrust] = await Promise.all([
     admin
       .from("listing_images")
-      .select("id", { count: "exact", head: true })
-      .eq("listing_id", listingId),
+      .select("storage_path,position")
+      .eq("listing_id", listingId)
+      .order("position", { ascending: true }),
     getSellerTrustSummary(sellerId),
   ]);
   if (imageError) throw new Error(imageError.message);
 
   const categoryRelation = listing.categories as unknown as { name: string } | { name: string }[] | null;
   const categoryName = Array.isArray(categoryRelation) ? categoryRelation[0]?.name : categoryRelation?.name;
+  const imageCount = imageRows?.length ?? 0;
   const baseDecision = automatedModerationDecision({
     title: listing.title,
     description: listing.description,
@@ -51,7 +54,7 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
     province: listing.province,
     city: listing.city,
     categoryName,
-    imageCount: imageCount ?? 0,
+    imageCount,
   });
 
   const reasons = [...baseDecision.reasons];
@@ -86,6 +89,13 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
     requiresReview = true;
   }
 
+  const imageModeration = await moderateListingImages((imageRows ?? []).map((image) => image.storage_path));
+  if (imageModeration.requiresReview) {
+    reasons.push(...imageModeration.reasons);
+    riskScore = Math.max(riskScore, 35);
+    requiresReview = true;
+  }
+
   let currentStatus = listing.status;
   if (["draft", "payment_failed"].includes(currentStatus)) {
     const { error } = await admin.from("listings").update({ status: "pending_review" })
@@ -95,7 +105,7 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
   }
 
   if (requiresReview) {
-    await recordModerationAudit({ listingId, sellerId, decision: "pending_review", riskScore, reasons, engineVersion: MODERATION_ENGINE_VERSION });
+    await recordModerationAudit({ listingId, sellerId, decision: "pending_review", riskScore, reasons, engineVersion: `${MODERATION_ENGINE_VERSION}+vision-v1` });
     return { status: "pending_review", reasons, riskScore };
   }
 
@@ -112,6 +122,6 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
     if (error) throw new Error(error.message);
   }
 
-  await recordModerationAudit({ listingId, sellerId, decision: "published", riskScore, reasons, engineVersion: MODERATION_ENGINE_VERSION });
+  await recordModerationAudit({ listingId, sellerId, decision: "published", riskScore, reasons, engineVersion: `${MODERATION_ENGINE_VERSION}+vision-v1` });
   return { status: "published", reasons, riskScore };
 }
