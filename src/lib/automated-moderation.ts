@@ -29,8 +29,42 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
 
   if (listingError || !listing) throw new Error(listingError?.message ?? "Listing not found");
   if (listing.status === "published") return { status: "published", reasons: [], riskScore: 0 };
-  if (!["draft", "payment_failed", "pending_review", "approved"].includes(listing.status)) {
+  if (listing.status === "pending_review") return { status: "pending_review", reasons: [], riskScore: 0 };
+  if (listing.status === "approved") {
+    const { data: published, error } = await admin.from("listings").update({ status: "published" })
+      .eq("id", listingId).eq("seller_id", sellerId).eq("status", "approved").select("id").maybeSingle();
+    if (error) throw new Error(error.message);
+    if (published) return { status: "published", reasons: [], riskScore: 0 };
+
+    const { data: latest } = await admin.from("listings").select("status").eq("id", listingId).eq("seller_id", sellerId).single();
+    return { status: latest?.status === "published" ? "published" : "pending_review", reasons: [], riskScore: 0 };
+  }
+  if (!["draft", "payment_failed"].includes(listing.status)) {
     throw new Error(`Listing is not eligible for paid moderation from status ${listing.status}`);
+  }
+
+  // Claim moderation by moving the listing into pending_review. Paystack's callback
+  // and webhook can arrive together; only the request that changes the row may run
+  // the expensive checks and write the audit event.
+  const { data: claimed, error: claimError } = await admin
+    .from("listings")
+    .update({ status: "pending_review" })
+    .eq("id", listingId)
+    .eq("seller_id", sellerId)
+    .in("status", ["draft", "payment_failed"])
+    .select("id")
+    .maybeSingle();
+  if (claimError) throw new Error(claimError.message);
+
+  if (!claimed) {
+    const { data: latest, error: latestError } = await admin
+      .from("listings")
+      .select("status")
+      .eq("id", listingId)
+      .eq("seller_id", sellerId)
+      .single();
+    if (latestError || !latest) throw new Error(latestError?.message ?? "Listing not found after moderation claim");
+    return { status: latest.status === "published" ? "published" : "pending_review", reasons: [], riskScore: 0 };
   }
 
   const [{ data: imageRows, error: imageError }, sellerTrust] = await Promise.all([
@@ -96,31 +130,20 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
     requiresReview = true;
   }
 
-  let currentStatus = listing.status;
-  if (["draft", "payment_failed"].includes(currentStatus)) {
-    const { error } = await admin.from("listings").update({ status: "pending_review" })
-      .eq("id", listingId).eq("seller_id", sellerId).in("status", ["draft", "payment_failed"]);
-    if (error) throw new Error(error.message);
-    currentStatus = "pending_review";
-  }
-
   if (requiresReview) {
     await recordModerationAudit({ listingId, sellerId, decision: "pending_review", riskScore, reasons, engineVersion: `${MODERATION_ENGINE_VERSION}+vision-v1` });
     return { status: "pending_review", reasons, riskScore };
   }
 
-  if (currentStatus === "pending_review") {
-    const { error } = await admin.from("listings").update({ status: "approved" })
-      .eq("id", listingId).eq("seller_id", sellerId).eq("status", "pending_review");
-    if (error) throw new Error(error.message);
-    currentStatus = "approved";
-  }
+  const { data: approved, error: approveError } = await admin.from("listings").update({ status: "approved" })
+    .eq("id", listingId).eq("seller_id", sellerId).eq("status", "pending_review").select("id").maybeSingle();
+  if (approveError) throw new Error(approveError.message);
+  if (!approved) return { status: "pending_review", reasons: [], riskScore: 0 };
 
-  if (currentStatus === "approved") {
-    const { error } = await admin.from("listings").update({ status: "published" })
-      .eq("id", listingId).eq("seller_id", sellerId).eq("status", "approved");
-    if (error) throw new Error(error.message);
-  }
+  const { data: published, error: publishError } = await admin.from("listings").update({ status: "published" })
+    .eq("id", listingId).eq("seller_id", sellerId).eq("status", "approved").select("id").maybeSingle();
+  if (publishError) throw new Error(publishError.message);
+  if (!published) return { status: "pending_review", reasons: [], riskScore: 0 };
 
   await recordModerationAudit({ listingId, sellerId, decision: "published", riskScore, reasons, engineVersion: `${MODERATION_ENGINE_VERSION}+vision-v1` });
   return { status: "published", reasons, riskScore };
