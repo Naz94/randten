@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireRandtenAdmin } from "@/lib/admin-access";
-import { approveListing, rejectListing, setReportStatus, suspendListing } from "./actions";
+import { approveListing, setReportStatus, suspendListing } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +56,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               </span>
               <span style={{ display: "flex", gap: ".5rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
                 <form action={approveListing.bind(null, listing.id)}><button className="primary" type="submit">Approve & publish</button></form>
-                <form action={rejectListing.bind(null, listing.id)}><button className="ghost" type="submit">Reject</button></form>
+                <Link className="ghost" href={`/admin/listing/${listing.id}`} style={{ textDecoration: "none" }}>Review / reject</Link>
               </span>
             </article>
           ))}
