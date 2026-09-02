@@ -23,7 +23,7 @@ function cloudinaryErrorMessage(error: unknown) {
   return "Photo upload failed";
 }
 
-function uploadBuffer(buffer: Buffer, publicId: string) {
+function uploadBuffer(buffer: Buffer, publicId: string, moderate: boolean) {
   const cloudinary = getCloudinary();
   return new Promise<{ public_id: string; width?: number; height?: number }>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -33,6 +33,10 @@ function uploadBuffer(buffer: Buffer, publicId: string) {
         resource_type: "image",
         overwrite: false,
         invalidate: true,
+        // Preserve the free Rekognition allowance by moderating only the primary
+        // listing photo. RANDTEN's text, trust and manual-review checks still
+        // apply to every listing.
+        ...(moderate ? { moderation: "aws_rek" } : {}),
       },
       (error, result) => {
         if (error || !result) return reject(error ?? new Error("Cloudinary upload failed"));
@@ -83,7 +87,7 @@ export async function uploadListingImage(listingId: string, formData: FormData) 
   const publicId = `randten/listings/${user.id}/${listingId}/${crypto.randomUUID()}`;
 
   try {
-    const uploaded = await uploadBuffer(Buffer.from(await file.arrayBuffer()), publicId);
+    const uploaded = await uploadBuffer(Buffer.from(await file.arrayBuffer()), publicId, position === 1);
     const { error: rowError } = await supabase.from("listing_images").insert({
       listing_id: listingId,
       storage_path: uploaded.public_id,
