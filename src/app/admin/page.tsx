@@ -52,7 +52,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <span>
                 <strong>{listing.title}</strong>
                 <small>R{(listing.price_cents / 100).toLocaleString("en-ZA", { minimumFractionDigits: 2 })} · {listing.city}, {listing.province}</small>
-                <Link href={`/sell/${listing.id}`}>Open seller listing</Link>
+                <Link href={`/admin/listing/${listing.id}`}>Open admin review</Link>
               </span>
               <span style={{ display: "flex", gap: ".5rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
                 <form action={approveListing.bind(null, listing.id)}><button className="primary" type="submit">Approve & publish</button></form>
@@ -72,7 +72,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   <strong>{listing?.title ?? "Listing"} · {report.reason}</strong>
                   <small>{report.status} · {new Date(report.created_at).toLocaleString("en-ZA")}</small>
                   {report.details && <small>{report.details}</small>}
-                  <Link href={`/listing/${report.listing_id}`}>View public listing</Link>
+                  <Link href={`/admin/listing/${report.listing_id}`}>Open admin review</Link>
                 </span>
                 <span style={{ display: "flex", gap: ".5rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
                   {report.status === "open" && <form action={setReportStatus.bind(null, report.id, "reviewing")}><button className="ghost" type="submit">Reviewing</button></form>}
