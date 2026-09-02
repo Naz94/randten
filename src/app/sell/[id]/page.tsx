@@ -7,6 +7,15 @@ import { deleteListingImage, uploadListingImage } from "./image-actions";
 import { rerunAutomatedModeration } from "./moderation-actions";
 import { startListingPayment } from "./payment-actions";
 
+const rejectionReasonLabels: Record<string, string> = {
+  prohibited_item: "Prohibited item",
+  misleading_information: "Misleading or incomplete information",
+  suspicious_contact_or_payment: "Suspicious contact or payment request",
+  duplicate_or_spam: "Duplicate or spam",
+  photo_issue: "Photo issue",
+  other: "Other",
+};
+
 export default async function DraftListingPage({
   params,
   searchParams,
@@ -22,7 +31,7 @@ export default async function DraftListingPage({
 
   const { data: listing } = await supabase
     .from("listings")
-    .select("id,title,description,price_cents,condition,province,city,status,created_at,categories(name)")
+    .select("id,title,description,price_cents,condition,province,city,status,rejection_reason,rejection_note,created_at,categories(name)")
     .eq("id", id)
     .eq("seller_id", user.id)
     .single();
@@ -57,6 +66,8 @@ export default async function DraftListingPage({
   const editable = ["draft", "payment_failed", "rejected"].includes(listing.status);
   const awaitingModeration = listing.status === "pending_review";
   const published = listing.status === "published";
+  const rejected = listing.status === "rejected";
+  const rejectionLabel = listing.rejection_reason ? rejectionReasonLabels[listing.rejection_reason] ?? listing.rejection_reason.replaceAll("_", " ") : "Reason not recorded";
 
   return (
     <main className="account-shell">
@@ -84,86 +95,36 @@ export default async function DraftListingPage({
 
           <section className="photo-section">
             <div className="section-heading">
-              <div>
-                <h2>Photos</h2>
-                <p className="muted">Add up to 8 clear photos. JPG, PNG or WebP, maximum 8 MB each.</p>
-              </div>
+              <div><h2>Photos</h2><p className="muted">Add up to 8 clear photos. JPG, PNG or WebP, maximum 8 MB each.</p></div>
               <strong>{images.length}/8</strong>
             </div>
-
-            {images.length > 0 && (
-              <div className="photo-grid">
-                {images.map((image) => (
-                  <div className="photo-tile" key={image.id}>
-                    <img src={image.url} alt={`${listing.title} photo ${image.position}`} />
-                    {editable && (
-                      <form action={deleteListingImage.bind(null, id, image.id)}>
-                        <button type="submit" className="photo-remove">Remove</button>
-                      </form>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {editable && images.length < 8 && (
-              <form action={uploadListingImage.bind(null, id)} className="photo-upload-form">
-                <label className="upload-box">
-                  <strong>Add a photo</strong>
-                  <span>Choose an image from your device</span>
-                  <input name="image" type="file" accept="image/jpeg,image/png,image/webp" required />
-                </label>
-                <button type="submit" className="primary">Upload photo</button>
-              </form>
-            )}
+            {images.length > 0 && <div className="photo-grid">{images.map((image) => <div className="photo-tile" key={image.id}><img src={image.url} alt={`${listing.title} photo ${image.position}`} />{editable && <form action={deleteListingImage.bind(null, id, image.id)}><button type="submit" className="photo-remove">Remove</button></form>}</div>)}</div>}
+            {editable && images.length < 8 && <form action={uploadListingImage.bind(null, id)} className="photo-upload-form"><label className="upload-box"><strong>Add a photo</strong><span>Choose an image from your device</span><input name="image" type="file" accept="image/jpeg,image/png,image/webp" required /></label><button type="submit" className="primary">Upload photo</button></form>}
           </section>
 
           {published ? (
-            <section className="readiness-card ready">
-              <p className="eyebrow">Live</p>
-              <h2>Your listing is published</h2>
-              <p className="muted">Payment was verified and RANDTEN&apos;s automated safety checks passed. Your listing can now appear in the marketplace.</p>
-            </section>
+            <section className="readiness-card ready"><p className="eyebrow">Live</p><h2>Your listing is published</h2><p className="muted">Payment was verified and RANDTEN&apos;s automated safety checks passed. Your listing can now appear in the marketplace.</p></section>
           ) : awaitingModeration ? (
+            <section className="readiness-card blocked"><p className="eyebrow">Safety review</p><h2>Payment received — extra review needed</h2><p className="muted">This listing entered review before RANDTEN&apos;s automated publishing flow was enabled, or automated checks asked for a closer look. You can safely run the current automated checks again.</p><form action={rerunAutomatedModeration.bind(null, id)}><button className="primary" type="submit">Run automated safety check</button></form></section>
+          ) : rejected ? (
             <section className="readiness-card blocked">
-              <p className="eyebrow">Safety review</p>
-              <h2>Payment received — extra review needed</h2>
-              <p className="muted">This listing entered review before RANDTEN&apos;s automated publishing flow was enabled, or automated checks asked for a closer look. You can safely run the current automated checks again.</p>
-              <form action={rerunAutomatedModeration.bind(null, id)}>
-                <button className="primary" type="submit">Run automated safety check</button>
-              </form>
+              <p className="eyebrow">Listing not approved</p>
+              <h2>Your listing was rejected</h2>
+              <p><strong>Reason:</strong> {rejectionLabel}</p>
+              {listing.rejection_note && <p className="muted" style={{ whiteSpace: "pre-wrap" }}>{listing.rejection_note}</p>}
+              <p className="muted">Review the reason above before submitting a corrected listing.</p>
             </section>
           ) : (
             <section className={`readiness-card ${readyForPayment ? "ready" : "blocked"}`}>
               <p className="eyebrow">Safety & readiness</p>
               <h2>{readyForPayment ? "Ready for the R10 step" : "Not ready for payment yet"}</h2>
               <p className="muted">RANDTEN checks the basics before taking your listing fee. After verified payment, low-risk listings can publish automatically; suspicious listings are held for an additional safety review.</p>
-              <div className="check-list">
-                {checks.map((check) => (
-                  <div className="check-row" key={check.id}>
-                    <span className="check-mark" aria-hidden="true">{check.passed ? "✓" : "!"}</span>
-                    <span><strong>{check.label}</strong><small>{check.detail}</small></span>
-                  </div>
-                ))}
-              </div>
-              {readyForPayment && editable ? (
-                <div className="payment-preview">
-                  <strong>R10 listing fee</strong>
-                  <p>Pay securely through Paystack. RANDTEN verifies the payment server-side and runs automated safety checks before the listing can go live.</p>
-                  <form action={startListingPayment.bind(null, id)}>
-                    <button className="primary" type="submit">Pay R10 & submit listing</button>
-                  </form>
-                </div>
-              ) : (
-                <p className="notice error">Fix the items marked above before RANDTEN offers payment.</p>
-              )}
+              <div className="check-list">{checks.map((check) => <div className="check-row" key={check.id}><span className="check-mark" aria-hidden="true">{check.passed ? "✓" : "!"}</span><span><strong>{check.label}</strong><small>{check.detail}</small></span></div>)}</div>
+              {readyForPayment && editable ? <div className="payment-preview"><strong>R10 listing fee</strong><p>Pay securely through Paystack. RANDTEN verifies the payment server-side and runs automated safety checks before the listing can go live.</p><form action={startListingPayment.bind(null, id)}><button className="primary" type="submit">Pay R10 & submit listing</button></form></div> : <p className="notice error">Fix the items marked above before RANDTEN offers payment.</p>}
             </section>
           )}
 
-          <div className="trust-card compact">
-            <strong>Private until cleared</strong>
-            <p>Draft photos are authenticated Cloudinary assets. RANDTEN uses automated checks to clear ordinary listings and escalates suspicious listings for additional review.</p>
-          </div>
+          <div className="trust-card compact"><strong>Private until cleared</strong><p>Draft photos are authenticated Cloudinary assets. RANDTEN uses automated checks to clear ordinary listings and escalates suspicious listings for additional review.</p></div>
           <Link className="primary" href="/sell" style={{ display: "inline-block", textDecoration: "none", marginTop: "1rem" }}>Create another listing</Link>
         </div>
       </section>
