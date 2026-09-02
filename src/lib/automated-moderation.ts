@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { automatedModerationDecision, MODERATION_ENGINE_VERSION } from "@/lib/listing-safety";
 import { recordModerationAudit } from "@/lib/moderation-audit";
+import { getSellerTrustSummary } from "@/lib/seller-trust";
 
 export type PaidListingModerationResult = {
   status: "published" | "pending_review";
@@ -31,10 +32,13 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
     throw new Error(`Listing is not eligible for paid moderation from status ${listing.status}`);
   }
 
-  const { count: imageCount, error: imageError } = await admin
-    .from("listing_images")
-    .select("id", { count: "exact", head: true })
-    .eq("listing_id", listingId);
+  const [{ count: imageCount, error: imageError }, sellerTrust] = await Promise.all([
+    admin
+      .from("listing_images")
+      .select("id", { count: "exact", head: true })
+      .eq("listing_id", listingId),
+    getSellerTrustSummary(sellerId),
+  ]);
   if (imageError) throw new Error(imageError.message);
 
   const categoryRelation = listing.categories as unknown as { name: string } | { name: string }[] | null;
@@ -53,6 +57,14 @@ export async function moderatePaidListing(listingId: string, sellerId: string): 
   const reasons = [...baseDecision.reasons];
   let riskScore = baseDecision.riskScore;
   let requiresReview = baseDecision.action === "review";
+
+  if (sellerTrust.riskAdjustment !== 0) {
+    riskScore = Math.max(0, Math.min(100, riskScore + sellerTrust.riskAdjustment));
+    if (sellerTrust.riskAdjustment > 0) {
+      reasons.push("seller history requires closer review");
+      if (riskScore >= 30) requiresReview = true;
+    }
+  }
 
   const { count: duplicateCount } = await admin
     .from("listings")
