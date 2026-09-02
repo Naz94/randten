@@ -69,15 +69,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             return (
               <article key={report.id} className="listing-row" style={{ alignItems: "flex-start" }}>
                 <span>
-                  <strong>{listing?.title ?? "Listing"} · {report.reason}</strong>
+                  <strong>{listing?.title ?? "Listing"} · {report.reason.replaceAll("_", " ")}</strong>
                   <small>{report.status} · {new Date(report.created_at).toLocaleString("en-ZA")}</small>
                   {report.details && <small>{report.details}</small>}
-                  <Link href={`/admin/listing/${report.listing_id}`}>Open admin review</Link>
+                  <Link href={`/admin/listing/${report.listing_id}`}>Open investigation & resolve</Link>
                 </span>
                 <span style={{ display: "flex", gap: ".5rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  {report.status === "open" && <form action={setReportStatus.bind(null, report.id, "reviewing")}><button className="ghost" type="submit">Reviewing</button></form>}
-                  {listing?.status === "published" && <form action={suspendListing.bind(null, report.listing_id)}><button className="ghost" type="submit">Suspend listing</button></form>}
-                  <form action={setReportStatus.bind(null, report.id, "closed")}><button className="primary" type="submit">Close report</button></form>
+                  {report.status === "open" && <form action={setReportStatus.bind(null, report.id, "reviewing")}><button className="ghost" type="submit">Start investigation</button></form>}
+                  {listing?.status === "published" && <form action={suspendListing.bind(null, report.listing_id)}><button className="ghost" type="submit">Emergency suspend</button></form>}
+                  <Link className="primary" href={`/admin/listing/${report.listing_id}`} style={{ textDecoration: "none" }}>Resolve report</Link>
                 </span>
               </article>
             );
