@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -111,7 +112,11 @@ export async function updateProfile(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { error } = await supabase
+  // The authenticated session determines the only profile row this server action
+  // may update. Only ordinary editable profile fields are written here; admin
+  // authorization fields are never accepted from the form.
+  const admin = createAdminClient();
+  const { error } = await admin
     .from("profiles")
     .update({ display_name: displayName, province, city })
     .eq("id", user.id);
