@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireRandtenAdmin } from "@/lib/admin-access";
 import { signedListingImageUrl } from "@/lib/cloudinary";
 import { getSellerTrustSummary } from "@/lib/seller-trust";
-import { approveListing, rejectListing, setReportStatus, suspendListing } from "../../actions";
+import { approveListing, rejectListing, resolveReport, setReportStatus, suspendListing } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +16,12 @@ export default async function AdminListingReviewPage({ params }: { params: Promi
   const { data: listing } = await admin.from("listings").select("id,title,description,price_cents,condition,province,city,status,seller_id,created_at,updated_at,categories(name)").eq("id", id).single();
   if (!listing) notFound();
 
-  const [{ data: seller }, { data: imageRows }, { data: moderationEvents }, { data: reports }, sellerTrust] = await Promise.all([
+  const [{ data: seller }, { data: imageRows }, { data: moderationEvents }, { data: reports }, { data: reportEvents }, sellerTrust] = await Promise.all([
     admin.from("profiles").select("id,display_name,province,city,rating_average,rating_count,created_at").eq("id", listing.seller_id).single(),
     admin.from("listing_images").select("id,storage_path,position").eq("listing_id", id).order("position", { ascending: true }),
     admin.from("moderation_events").select("id,decision,risk_score,reasons,engine_version,admin_note,created_at").eq("listing_id", id).order("created_at", { ascending: false }).limit(10),
-    admin.from("listing_reports").select("id,reporter_id,reason,details,status,created_at").eq("listing_id", id).order("created_at", { ascending: false }),
+    admin.from("listing_reports").select("id,reporter_id,reason,details,status,resolution,resolution_note,resolved_at,resolved_by,created_at").eq("listing_id", id).order("created_at", { ascending: false }),
+    admin.from("report_events").select("id,report_id,event_type,resolution,admin_note,listing_action,created_at").eq("listing_id", id).order("created_at", { ascending: false }).limit(50),
     getSellerTrustSummary(listing.seller_id),
   ]);
 
@@ -79,6 +80,17 @@ export default async function AdminListingReviewPage({ params }: { params: Promi
                 </div>
               ))}
             </div>
+
+            <div className="auth-card" style={{ marginTop: "2rem" }}>
+              <div className="section-heading"><h2>Report audit trail</h2><span className="muted">Admin investigation history</span></div>
+              {!reportEvents?.length ? <p className="muted">No report investigation events recorded yet.</p> : reportEvents.map((event) => (
+                <div key={event.id} className="trust-card compact" style={{ marginTop: "1rem" }}>
+                  <strong>{event.event_type.replaceAll("_", " ")}{event.resolution ? ` · ${event.resolution.replaceAll("_", " ")}` : ""}</strong>
+                  {event.admin_note && <p>{event.admin_note}</p>}
+                  <small className="muted">Listing action: {event.listing_action.replaceAll("_", " ")} · {new Date(event.created_at).toLocaleString("en-ZA")}</small>
+                </div>
+              ))}
+            </div>
           </div>
 
           <aside>
@@ -113,7 +125,24 @@ export default async function AdminListingReviewPage({ params }: { params: Promi
             <div className="auth-card" style={{ marginTop: "2rem" }}>
               <div className="section-heading"><h2>Reports</h2><strong>{reports?.length ?? 0}</strong></div>
               {!reports?.length ? <p className="muted">No reports against this listing.</p> : reports.map((report) => (
-                <div key={report.id} className="trust-card compact" style={{ marginTop: "1rem" }}><strong>{report.reason} · {report.status}</strong>{report.details && <p>{report.details}</p>}<small className="muted">{new Date(report.created_at).toLocaleString("en-ZA")}</small><div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap", marginTop: ".75rem" }}>{report.status === "open" && <form action={setReportStatus.bind(null, report.id, "reviewing")}><button className="ghost" type="submit">Reviewing</button></form>}{report.status !== "closed" && <form action={setReportStatus.bind(null, report.id, "closed")}><button className="primary" type="submit">Close report</button></form>}</div></div>
+                <div key={report.id} className="trust-card compact" style={{ marginTop: "1rem" }}>
+                  <strong>{report.reason.replaceAll("_", " ")} · {report.status}</strong>
+                  {report.details && <p>{report.details}</p>}
+                  <small className="muted">Reported {new Date(report.created_at).toLocaleString("en-ZA")}</small>
+                  {report.status === "closed" ? <>
+                    <p><strong>Resolution:</strong> {report.resolution?.replaceAll("_", " ") ?? "not recorded"}</p>
+                    {report.resolution_note && <p className="muted">Admin note: {report.resolution_note}</p>}
+                    {report.resolved_at && <small className="muted">Resolved {new Date(report.resolved_at).toLocaleString("en-ZA")}</small>}
+                  </> : <div style={{ display: "grid", gap: ".75rem", marginTop: ".75rem" }}>
+                    {report.status === "open" && <form action={setReportStatus.bind(null, report.id, "reviewing")}><button className="ghost" type="submit" style={{ width: "100%" }}>Start investigation</button></form>}
+                    <form action={resolveReport.bind(null, report.id)} style={{ display: "grid", gap: ".6rem" }}>
+                      <label><strong>Resolution</strong><select name="resolution" required defaultValue="" style={{ width: "100%", marginTop: ".3rem" }}><option value="" disabled>Select outcome</option><option value="substantiated">Substantiated</option><option value="unsubstantiated">Unsubstantiated</option><option value="duplicate">Duplicate report</option><option value="insufficient_evidence">Insufficient evidence</option></select></label>
+                      <label><strong>Listing action</strong><select name="listing_action" defaultValue="none" style={{ width: "100%", marginTop: ".3rem" }}><option value="none">No listing action</option><option value="suspended">Suspend listing</option></select></label>
+                      <label><strong>Admin note</strong><textarea name="note" required minLength={5} maxLength={1000} rows={4} placeholder="What was checked and why this outcome was chosen" style={{ width: "100%", marginTop: ".3rem" }} /></label>
+                      <button className="primary" type="submit" style={{ width: "100%" }}>Resolve report</button>
+                    </form>
+                  </div>}
+                </div>
               ))}
             </div>
           </aside>
