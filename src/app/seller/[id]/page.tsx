@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMarketplaceListings, getSellerPublicProfile } from "@/lib/marketplace";
+import { getSellerTrustSummary } from "@/lib/seller-trust";
 
 export const dynamic = "force-dynamic";
 
 export default async function SellerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [seller, listings] = await Promise.all([
+  const [seller, listings, trust] = await Promise.all([
     getSellerPublicProfile(id),
     getMarketplaceListings({ sellerId: id, limit: 100 }),
+    getSellerTrustSummary(id),
   ]);
   if (!seller) notFound();
 
@@ -24,8 +26,8 @@ export default async function SellerPage({ params }: { params: Promise<{ id: str
           <p className="muted">{seller.city && seller.province ? `${seller.city}, ${seller.province}` : seller.province ?? "South Africa"}</p>
         </div>
         <div className="seller-trust-panel">
-          <strong>{seller.rating_count ? `${Number(seller.rating_average ?? 0).toFixed(1)} ★` : "New seller"}</strong>
-          <span>{seller.rating_count ?? 0} ratings</span>
+          <strong>{trust.publicLabel}</strong>
+          <span>{seller.rating_count ? `${Number(seller.rating_average ?? 0).toFixed(1)} ★ · ${seller.rating_count} ratings` : "No ratings yet"}</span>
           <span>{listings.length} live listings</span>
           <span>Joined {joined.toLocaleDateString("en-ZA", { month: "long", year: "numeric" })}</span>
         </div>
