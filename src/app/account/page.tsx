@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { signOut, updateProfile } from "../auth/actions";
 
 const provinces = ["Eastern Cape","Free State","Gauteng","KwaZulu-Natal","Limpopo","Mpumalanga","North West","Northern Cape","Western Cape"];
@@ -11,10 +12,24 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("display_name,province,city,rating_average,rating_count,created_at,is_admin").eq("id", user.id).single();
-  if (!profile) redirect("/login?error=We%20could%20not%20load%20your%20profile");
+  // Authentication is verified with the user's session above. Read the matching
+  // profile server-side so an RLS/grant issue cannot incorrectly look like a
+  // missing profile after auth flows such as password recovery.
+  const admin = createAdminClient();
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .select("display_name,province,city,rating_average,rating_count,created_at,is_admin")
+    .eq("id", user.id)
+    .maybeSingle();
 
-  const { data: listings } = await supabase
+  if (profileError) {
+    redirect(`/login?error=${encodeURIComponent("We could not load your profile. Please try logging in again.")}`);
+  }
+  if (!profile) {
+    redirect(`/login?error=${encodeURIComponent("Your account exists, but its RANDTEN profile is missing. Please contact support.")}`);
+  }
+
+  const { data: listings } = await admin
     .from("listings")
     .select("id,title,status,price_cents,updated_at")
     .eq("seller_id", user.id)
