@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireRandtenAdmin } from "@/lib/admin-access";
 import { signedListingImageUrl } from "@/lib/cloudinary";
+import { getSellerTrustSummary } from "@/lib/seller-trust";
 import { approveListing, rejectListing, setReportStatus, suspendListing } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -15,11 +16,12 @@ export default async function AdminListingReviewPage({ params }: { params: Promi
   const { data: listing } = await admin.from("listings").select("id,title,description,price_cents,condition,province,city,status,seller_id,created_at,updated_at,categories(name)").eq("id", id).single();
   if (!listing) notFound();
 
-  const [{ data: seller }, { data: imageRows }, { data: moderationEvents }, { data: reports }] = await Promise.all([
+  const [{ data: seller }, { data: imageRows }, { data: moderationEvents }, { data: reports }, sellerTrust] = await Promise.all([
     admin.from("profiles").select("id,display_name,province,city,rating_average,rating_count,created_at").eq("id", listing.seller_id).single(),
     admin.from("listing_images").select("id,storage_path,position").eq("listing_id", id).order("position", { ascending: true }),
     admin.from("moderation_events").select("id,decision,risk_score,reasons,engine_version,admin_note,created_at").eq("listing_id", id).order("created_at", { ascending: false }).limit(10),
     admin.from("listing_reports").select("id,reporter_id,reason,details,status,created_at").eq("listing_id", id).order("created_at", { ascending: false }),
+    getSellerTrustSummary(listing.seller_id),
   ]);
 
   const images = (imageRows ?? []).map((image) => ({ ...image, url: signedListingImageUrl(image.storage_path) }));
@@ -95,6 +97,15 @@ export default async function AdminListingReviewPage({ params }: { params: Promi
                 {listing.status === "published" && <form action={suspendListing.bind(null, listing.id)}><button className="ghost" type="submit" style={{ width: "100%" }}>Suspend listing</button></form>}
                 {!['pending_review','published'].includes(listing.status) && <p className="notice">No moderation action is available for the current <strong>{listing.status.replaceAll("_", " ")}</strong> state.</p>}
               </div>
+            </div>
+
+            <div className="auth-card" style={{ marginTop: "2rem" }}>
+              <div className="section-heading"><h2>Seller trust</h2><strong>{sellerTrust.score}/100</strong></div>
+              <p><strong>{sellerTrust.band.replaceAll("_", " ")}</strong></p>
+              <p className="muted">Internal signal only. Buyers never see this score.</p>
+              <p className="muted">Published: {sellerTrust.publishedListings} · Rejected: {sellerTrust.rejectedListings} · Active reports: {sellerTrust.activeReports}</p>
+              <p className="muted">Account age: {sellerTrust.accountAgeDays} days · Moderation adjustment: {sellerTrust.riskAdjustment > 0 ? "+" : ""}{sellerTrust.riskAdjustment}</p>
+              {sellerTrust.internalSignals.length ? <p className="muted">Signals: {sellerTrust.internalSignals.join(" · ")}</p> : <p className="muted">No material trust signals yet.</p>}
             </div>
 
             <div className="auth-card" style={{ marginTop: "2rem" }}><h2>Seller</h2><p><strong>{seller?.display_name ?? "Unknown seller"}</strong></p><p className="muted">{seller?.city ?? "—"}, {seller?.province ?? "—"}</p><p className="muted">Rating: {seller?.rating_average ?? 0} ({seller?.rating_count ?? 0} ratings)</p>{seller && <Link href={`/seller/${seller.id}`}>View public seller profile</Link>}</div>
